@@ -34,9 +34,13 @@ def get_video_formats(url):
             seen_quality = set()
             
             for fmt in info.get('formats', []):
+                # Пропускаем если fmt не словарь
+                if not isinstance(fmt, dict):
+                    continue
+                    
                 # Ищем форматы где есть и видео и аудио
-                has_video = fmt.get('vcodec') != 'none'
-                has_audio = fmt.get('acodec') != 'none'
+                has_video = fmt.get('vcodec') and fmt.get('vcodec') != 'none'
+                has_audio = fmt.get('acodec') and fmt.get('acodec') != 'none'
                 
                 if has_video and has_audio:
                     quality = fmt.get('format_note', '')
