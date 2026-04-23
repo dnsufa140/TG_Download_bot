@@ -19,6 +19,7 @@ def get_video_formats(url):
         'quiet': True,
         'no_warnings': True,
         'extract_flat': False,
+        'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
     }
     
     try:
@@ -28,15 +29,23 @@ def get_video_formats(url):
             if not info:
                 return None, "Не удалось получить информацию о видео"
             
-            # Фильтруем только видео с аудио
+            # Фильтруем только видео с аудио (комбинированные форматы)
             formats = []
             seen_quality = set()
             
             for fmt in info.get('formats', []):
-                if fmt.get('vcodec') != 'none' and fmt.get('acodec') != 'none':
+                # Ищем форматы где есть и видео и аудио
+                has_video = fmt.get('vcodec') != 'none'
+                has_audio = fmt.get('acodec') != 'none'
+                
+                if has_video and has_audio:
                     quality = fmt.get('format_note', '')
-                    if not quality:
-                        quality = f"{fmt.get('height', 'unknown')}p"
+                    if not quality or quality == 'tiny':
+                        height = fmt.get('height')
+                        if height:
+                            quality = f"{height}p"
+                        else:
+                            quality = f"{fmt.get('width', '?')}x{fmt.get('height', '?')}"
                     
                     if quality and quality not in seen_quality:
                         seen_quality.add(quality)
@@ -45,13 +54,60 @@ def get_video_formats(url):
                             'format_id': fmt.get('format_id'),
                             'quality': quality,
                             'ext': fmt.get('ext', 'mp4'),
-                            'filesize': filesize
+                            'filesize': filesize,
+                            'type': 'combined'
                         })
             
-            # Сортируем по качеству (по высоте)
-            formats.sort(key=lambda x: int(x['quality'].replace('p', '').replace('k', '000')) if x['quality'][:-1].isdigit() else 0, reverse=True)
+            # Если нет комбинированных форматов, берем лучшие видео+аудио отдельно
+            if not formats:
+                video_formats = []
+                audio_formats = []
+                
+                for fmt in info.get('formats', []):
+                    if fmt.get('vcodec') != 'none' and fmt.get('acodec') == 'none':
+                        height = fmt.get('height')
+                        if height:
+                            quality = f"{height}p"
+                            video_formats.append({
+                                'format_id': fmt.get('format_id'),
+                                'quality': quality,
+                                'ext': fmt.get('ext', 'mp4'),
+                                'filesize': fmt.get('filesize') or fmt.get('filesize_approx', 0),
+                                'type': 'video_only'
+                            })
+                    elif fmt.get('acodec') != 'none' and fmt.get('vcodec') == 'none':
+                        audio_formats.append(fmt)
+                
+                # Берем лучший аудио
+                best_audio = None
+                for aud in audio_formats:
+                    if aud.get('abr') or aud.get('tbr'):
+                        best_audio = aud
+                        break
+                
+                if best_audio and video_formats:
+                    for vid in video_formats[:10]:
+                        formats.append({
+                            'format_id': f"{vid['format_id']}+{best_audio.get('format_id')}",
+                            'quality': vid['quality'],
+                            'ext': 'mp4',
+                            'filesize': vid['filesize'],
+                            'type': 'separate'
+                        })
             
-            return info, formats[:10]  # Возвращаем топ-10 форматов
+            # Сортируем по качеству
+            def sort_key(x):
+                q = x['quality']
+                if q.endswith('p'):
+                    try:
+                        return int(q[:-1])
+                    except:
+                        return 0
+                return 0
+            
+            formats.sort(key=sort_key, reverse=True)
+            
+            return info, formats[:10]
             
     except Exception as e:
         return None, f"Ошибка: {str(e)}"
