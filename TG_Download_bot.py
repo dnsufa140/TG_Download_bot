@@ -18,8 +18,12 @@ def get_video_formats(url):
     ydl_opts = {
         'quiet': True,
         'no_warnings': True,
+        'nocheckcertificate': True,
         'extract_flat': False,
-        'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+        'ignoreerrors': True,
+        'prefer_free_formats': False,
+        'socket_timeout': 30,
     }
     
     try:
@@ -29,11 +33,19 @@ def get_video_formats(url):
             if not info:
                 return None, "Не удалось получить информацию о видео"
             
+            # Проверяем что info это словарь
+            if not isinstance(info, dict):
+                return None, "Некорректный ответ от YouTube"
+            
             # Фильтруем только видео с аудио (комбинированные форматы)
             formats = []
             seen_quality = set()
             
-            for fmt in info.get('formats', []):
+            all_formats = info.get('formats', [])
+            if not isinstance(all_formats, list):
+                return None, "Не удалось получить список форматов"
+            
+            for fmt in all_formats:
                 # Пропускаем если fmt не словарь
                 if not isinstance(fmt, dict):
                     continue
@@ -66,7 +78,7 @@ def get_video_formats(url):
                 video_formats = []
                 audio_formats = []
                 
-                for fmt in info.get('formats', []):
+                for fmt in all_formats:
                     if not isinstance(fmt, dict):
                         continue
                     if fmt.get('vcodec') != 'none' and fmt.get('acodec') == 'none':
@@ -111,9 +123,10 @@ def get_video_formats(url):
             
             formats.sort(key=sort_key, reverse=True)
             
-            return info, formats[:10]
+            return info, formats[:10] if formats else []
             
     except Exception as e:
+        logging.error(f"Error getting formats: {e}")
         return None, f"Ошибка: {str(e)}"
 
 
