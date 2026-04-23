@@ -62,12 +62,13 @@ def get_video_formats(url):
                             'type': 'combined'
                         })
             
-            # Если нет комбинированных форматов, берем лучшие видео+аудио отдельно
             if not formats:
                 video_formats = []
                 audio_formats = []
                 
                 for fmt in info.get('formats', []):
+                    if not isinstance(fmt, dict):
+                        continue
                     if fmt.get('vcodec') != 'none' and fmt.get('acodec') == 'none':
                         height = fmt.get('height')
                         if height:
@@ -84,10 +85,9 @@ def get_video_formats(url):
                 
                 # Берем лучший аудио
                 best_audio = None
-                for aud in audio_formats:
-                    if aud.get('abr') or aud.get('tbr'):
-                        best_audio = aud
-                        break
+                for aud in sorted(audio_formats, key=lambda x: x.get('abr', 0) or x.get('tbr', 0), reverse=True):
+                    best_audio = aud
+                    break
                 
                 if best_audio and video_formats:
                     for vid in video_formats[:10]:
@@ -148,7 +148,11 @@ async def handle_link(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Создаем клавиатуру с вариантами качества
     keyboard = []
     for fmt in formats:
-        size_mb = round(fmt['filesize'] / (1024 * 1024), 1) if fmt['filesize'] else '?'
+        # Дополнительная защита: проверяем что fmt это словарь
+        if not isinstance(fmt, dict):
+            logging.warning(f"Пропущен некорректный формат: {fmt}")
+            continue
+        size_mb = round(fmt['filesize'] / (1024 * 1024), 1) if fmt.get('filesize') else '?'
         btn_text = f"{fmt['quality']} ({fmt['ext']}) - {size_mb} MB"
         keyboard.append([InlineKeyboardButton(btn_text, callback_data=f"download_{fmt['format_id']}_{text}")])
     
