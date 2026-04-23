@@ -33,18 +33,19 @@ def get_video_formats(url):
             seen_quality = set()
             
             for fmt in info.get('formats', []):
-                if fmt.get('vcodec') != 'none' and fmt.get('acodest') != 'none':
+                if fmt.get('vcodec') != 'none' and fmt.get('acodec') != 'none':
                     quality = fmt.get('format_note', '')
                     if not quality:
                         quality = f"{fmt.get('height', 'unknown')}p"
                     
                     if quality and quality not in seen_quality:
                         seen_quality.add(quality)
+                        filesize = fmt.get('filesize') or fmt.get('filesize_approx', 0)
                         formats.append({
                             'format_id': fmt.get('format_id'),
                             'quality': quality,
                             'ext': fmt.get('ext', 'mp4'),
-                            'filesize': fmt.get('filesize', 0)
+                            'filesize': filesize
                         })
             
             # Сортируем по качеству (по высоте)
